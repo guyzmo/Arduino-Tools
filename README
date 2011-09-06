@@ -4,3 +4,5 @@ It works for me, I mean it will work with a MacOSX installation, but need pathes
 It needs an Arduino IDE install, but does not executes it.
 
 don't hesitate to fork it with updated linux pathes.
+
+I plan on rewriting a Makefile using CMake, so it will not need manual declaration of ".cpp" files for each library you need and it won't have awful sed pipes inside.
