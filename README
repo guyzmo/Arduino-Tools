@@ -1,0 +1,6 @@
+see code sources for licences, and more info.
+
+It works for me, I mean it will work with a MacOSX installation, but need pathes tweaking to work on other environments.
+It needs an Arduino IDE install, but does not executes it.
+
+don't hesitate to fork it with updated linux pathes.
