@@ -37,6 +37,10 @@
 #  * Python version needs python-serial :
 # if you want to compile against ATTiny, see ATTINY_DIR below.
 
+############################################################################
+# Project's settings
+############################################################################
+
 VERSION = 0.1
 
 # Standard Arduino libraries it will import, e.g. LiquidCrystal:
@@ -48,6 +52,10 @@ USERLIBS =
 # Arduino model:
 # You can set this to be a string, such as uno, atmega328, diecimila and mega,
 MODEL ?= uno
+
+############################################################################
+# Platform's settings
+############################################################################
 
 # Determine operating system environment
 UNAME = $(shell uname)
