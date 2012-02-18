@@ -57,7 +57,7 @@ TARGET = $(shell basename $(PWD))
 # Where do you keep the official Arduino software package?
 ARDUINO_DIR = /Applications/Arduino.app/Contents/Resources/Java
 HOME_LIB = $(HOME)/Documents/Arduino/libraries
-# path to ATTiny files look at http://hlt.media.mit.edu/?p=1229
+# path to ATTiny files look at http://hlt.media.mit.edu/?p=1695
 ATTINY_DIR=$(ARDUINO_DIR)/hardware/attiny45_85
 
 ############################################################################
