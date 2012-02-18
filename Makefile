@@ -96,11 +96,11 @@ ifeq "$(UNAME)" "Windows"
  PORT ?= COM1 #XXX needs to be checked !
 else
  ifeq "$(UNAME)" "Darwin"
-   ifeq "$(MODEL)" "uno"
-    PORT ?= /dev/tty.usbmodem*
-   else
-    PORT ?= /dev/tty.usbserial*
-   endif
+  ifeq "$(MODEL)" "uno"
+   PORT ?= /dev/tty.usbmodem*
+  else
+   PORT ?= /dev/tty.usbserial*
+  endif
  else
   ifeq "$(UNAME)" "Linux"
    ifeq "$(MODEL)" "uno"
@@ -165,7 +165,7 @@ else
  ifeq "$(MODEL)" "micro"
   ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/micro
  else
-   ifeq (,$(findstring "tiny",$(MODEL)))
+   ifneq (,$(findstring "tiny",$(MODEL)))
     ARDUINO_VARIANT=$(ATTINY_DIR)/cores/attiny45_85
    else
     ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/standard
