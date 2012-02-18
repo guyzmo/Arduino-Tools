@@ -58,7 +58,11 @@ MODEL ?= uno
 ############################################################################
 
 # Determine operating system environment
-UNAME = $(shell uname)
+ifneq "$(wildcard C:/Windows/)" ""
+ UNAME=Windows
+else
+ UNAME=$(shell uname)
+endif
 
 # Name of the program and source .pde file:
 TARGET = $(shell basename $(PWD))
@@ -74,24 +78,32 @@ ATTINY_DIR=$(ARDUINO_DIR)/hardware/attiny45_85
 ############################################################################
 
 # Where are tools like avr-gcc located on your system?
-ifeq "$(UNAME)" "Darwin"
-AVR_TOOLS_PATH = $(ARDUINO_DIR)/hardware/tools/avr/bin
+ifeq "$(UNAME)" "Windows"
+  AVR_TOOLS_PATH = $(ARDUINO_DIR)/hardware/tools/avr/bin #XXX needs to be checked !
 else
-AVR_TOOLS_PATH = /usr/bin
+ ifeq "$(UNAME)" "Darwin"
+  AVR_TOOLS_PATH = $(ARDUINO_DIR)/hardware/tools/avr/bin
+ else
+  AVR_TOOLS_PATH = /usr/bin
+ endif
 endif
 
-ifeq "$(UNAME)" "Darwin"
-  ifeq "$(MODEL)" "uno"
-   PORT ?= /dev/tty.usbmodem*
-  else
-   PORT ?= /dev/tty.usbserial*
-  endif
+ifeq "$(UNAME)" "Windows"
+ PORT ?= COM1 #XXX needs to be checked !
 else
- ifeq "$(UNAME)" "Linux"
-  ifeq "$(MODEL)" "uno"
-PORT ?= /dev/ttyACM*
-  else
-PORT ?= /dev/ttyUSB*
+ ifeq "$(UNAME)" "Darwin"
+   ifeq "$(MODEL)" "uno"
+    PORT ?= /dev/tty.usbmodem*
+   else
+    PORT ?= /dev/tty.usbserial*
+   endif
+ else
+  ifeq "$(UNAME)" "Linux"
+   ifeq "$(MODEL)" "uno"
+    PORT ?= /dev/ttyACM*
+   else
+    PORT ?= /dev/ttyUSB*
+   endif
   endif
  endif
 endif
@@ -105,11 +117,15 @@ else
  ifeq "$(RESET_MODE)" "perl"
   RESET_DEVICE = perl -MDevice::SerialPort -e 'Device::SerialPort->new("/dev/ttyUSB0")->pulse_dtr_on(1000)'
  else
-  ifeq "$(UNAME)" "Linux"
-   RESET_DEVICE = stty -F $(PORT) hupcl
+  ifeq "$(UNAME)" "Windows"
+   RESET_DEVICE = echo "CAN'T RESET DEVICE ON WINDOWS !"
   else
-   # BSD uses small f
-   RESET_DEVICE = stty -f $(PORT) hupcl
+   ifeq "$(UNAME)" "Linux"
+    RESET_DEVICE = stty -F $(PORT) hupcl
+   else
+    # BSD uses small f
+    RESET_DEVICE = stty -f $(PORT) hupcl
+   endif
   endif
  endif
 endif
@@ -154,7 +170,11 @@ else
 endif
 
 CWD = $(shell pwd)
-CWDBASE = $(shell basename `pwd`)
+ifeq "$(UNAME)" "Windows"
+ CWDBASE = $(shell for %i in $(CWD) do @echo %~nxi) # XXX needs to be tested
+else
+ CWDBASE = $(shell basename `pwd`)
+endif
 TARFILE = $(TARGET)-$(VERSION).tar.gz
 
 ARDUINO_CORE = $(ARDUINO_DIR)/hardware/arduino/cores/arduino
