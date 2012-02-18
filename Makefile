@@ -65,7 +65,11 @@ else
 endif
 
 # Name of the program and source .pde file:
-TARGET = $(shell basename $(PWD))
+ifeq "$(UNAME)" "Windows"
+ TARGET = $(shell for %i in $(PWD) do @echo %~nxi) # XXX needs to be tested
+else
+ TARGET = $(shell basename $(PWD))
+endif
 
 # Where do you keep the official Arduino software package?
 ARDUINO_DIR = /Applications/Arduino.app/Contents/Resources/Java
@@ -161,7 +165,7 @@ else
  ifeq "$(MODEL)" "micro"
   ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/micro
  else
-   ifneq (,$(findstring "tiny",$(MODEL)))
+   ifeq (,$(findstring "tiny",$(MODEL)))
     ARDUINO_VARIANT=$(ATTINY_DIR)/cores/attiny45_85
    else
     ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/standard
@@ -169,11 +173,10 @@ else
  endif
 endif
 
-CWD = $(shell pwd)
 ifeq "$(UNAME)" "Windows"
- CWDBASE = $(shell for %i in $(CWD) do @echo %~nxi) # XXX needs to be tested
+ CWDBASE = $(shell for %i in $(PWD) do @echo %~nxi) # XXX needs to be tested
 else
- CWDBASE = $(shell basename `pwd`)
+ CWDBASE = $(shell basename $(PWD))
 endif
 TARFILE = $(TARGET)-$(VERSION).tar.gz
 
