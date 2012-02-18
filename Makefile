@@ -1,98 +1,169 @@
-# Arduino 0018 Makefile
-# Arduino adaptation by mellis, eighthave, oli.keller, 
-# Path for MacOSX and for libraries added by guyzmo{at}hackable-devices.org
+# Makefile for building Arduino sketches with Arduino 1.0.
 #
-# This makefile allows you to build sketches from the command line
+# Makefile-arduino v0.8 by Bernard Pratz <guyzmo@hackable-devices.org>
+#
+# Makefile-arduino v0.7 by Akkana Peck <akkana@shallowsky.com>
+# Adapted from a long-ago Arduino 0011 Makefile by mellis, eighthave, oli.keller
+#
+# This Makefile allows you to build sketches from the command line
 # without the Arduino environment (or Java).
 #
-# Detailed instructions for using the makefile:
+# Detailed instructions for using this Makefile:
 #
-#  1. Copy this file into the folder with your sketch. There should be a
-#     file with the same name as the folder and with the extension .pde
-#     (e.g. foo.pde in the foo/ folder).
+#  1. Copy this file into the folder with your sketch.
+#     There should be a file with the extension .pde (e.g. blink.pde).
+#     cd into this directory. Be sure your directory has the same name
+#     as the .pde file.
 #
-#  2. Modify the line containg "INSTALL_DIR" to point to the directory that
+#  2. Modify the line containg "ARDUINO_DIR" to point to the directory that
 #     contains the Arduino installation (for example, under Mac OS X, this
-#     might be /Applications/arduino-0012).
+#     might be /Applications/arduino-1.0). If it's in your home directory,
+#     you can include $(HOME) as part of the path.
 #
-#  3. Modify the line containing "PORT" to refer to the filename
-#     representing the USB or serial connection to your Arduino board
-#     (e.g. PORT = /dev/tty.USB0).  If the exact name of this file
-#     changes, you can use * as a wildcard (e.g. PORT = /dev/tty.usb*).
+#  3. Set MODEL to your Arduino model.
+#     Tested so far on uno, atmega328, diecimila and mega.
+#     but there are lots of other options:
+#     Use the "make list" command to know all the available models
 #
-#  4. Set the line containing "MCU" to match your board's processor.
-#     Older one's are atmega8 based, newer ones like Arduino Mini, Bluetooth
-#     or Diecimila have the atmega168.  If you're using a LilyPad Arduino,
-#     change F_CPU to 8000000.
+#  4. Run "make" to compile/verify your program.
 #
-#  5. At the command line, change to the directory containing your
-#     program's file and the makefile.
+#  5. Run "make upload" (and reset your Arduino if it requires it)
+#     to download your program to the Arduino.
 #
-#  6. Type "make" and press enter to compile/verify your program.
-#
-#  7. Type "make upload", reset your Arduino board, and press enter to
-#     upload your program to the Arduino board.
-#
-# $Id$
+# Nota Bene:
+# if reset does not work, add RESET_MODE='python' or RESET_MODE='perl' to your env
+#  * Perl version needs libdevice-serialport-perl :
+#  * Python version needs python-serial :
+# if you want to compile against ATTiny, see ATTINY_DIR below.
 
-TARGET = $(notdir $(CURDIR))
-INSTALL_DIR = /Applications/Arduino.app/Contents/Resources/Java
-INSTALL_LIB_DIR = $(INSTALL_DIR)/libraries
-#PORT = /dev/tty.usbserial-A6008l0J
-#PORT = /dev/tty.usbserial-A800eIR3
-UPLOAD_RATE = 57600
-AVRDUDE_PROGRAMMER = stk500v1
-#MCU = atmega168
-MCU = atmega328p
-F_CPU = 16000000
+VERSION = 0.1
 
-# give the path to the user libraries
-LOCAL_LIB_DIR = $(HOME)/Documents/Arduino/libraries
+# Standard Arduino libraries it will import, e.g. LiquidCrystal:
+ARDLIBS = SoftwareSerial
 
-# for every library you need to use, please add the path to the .cpp file here
-LOCAL_CXX = \
-$(LOCAL_LIB_DIR)/Sure0832/Sure0832.cpp \
-#$(LOCAL_LIB_DIR)/EthernetDHCP/EthernetDHCP.cpp
+# User-specified (in ~/sketchbook/libraries/) libraries (untested):
+USERLIBS = 
 
-LOCAL_C = 
-#$(LOCAL_LIB_DIR)/EthernetDHCP/utility/EthernetDhcpUtil.c
+# Arduino model:
+# You can set this to be a string, such as uno, atmega328, diecimila and mega,
+MODEL ?= uno
 
+# Determine operating system environment
+UNAME = $(shell uname)
+
+# Name of the program and source .pde file:
+TARGET = $(shell basename $(PWD))
+
+# Where do you keep the official Arduino software package?
+ARDUINO_DIR = /Applications/Arduino10.app/Contents/Resources/Java
+HOME_LIB = $(HOME)/Documents/Arduino/libraries
+# path to ATTiny files look at http://hlt.media.mit.edu/?p=1229
+ATTINY_DIR=$(ARDUINO_DIR)/hardware/attiny45_85
 
 ############################################################################
-# Below here nothing should be changed...
+# Below here nothing should need to be changed. Cross your fingers!
+############################################################################
 
-VERSION=18
-ARDUINO = $(INSTALL_DIR)/hardware/arduino/cores/arduino
-AVR_TOOLS_PATH = $(INSTALL_DIR)/hardware/tools/avr/bin
-#AVR_TOOLS_PATH = /usr/bin
-AVRDUDE_PATH = $(INSTALL_DIR)/hardware/tools/avr/bin
-ARD_C=$(shell find $(INSTALL_LIB_DIR)/*/ $(LOCAL_LIB_DIR)/*/ | grep '\.c\$$' | tr '\n' ' ')
-C_MODULES =  \
-$(ARDUINO)/wiring_pulse.c \
-$(ARDUINO)/wiring_analog.c \
-$(ARDUINO)/pins_arduino.c \
-$(ARDUINO)/wiring.c \
-$(ARDUINO)/wiring_digital.c \
-$(ARDUINO)/WInterrupts.c \
-$(ARDUINO)/wiring_shift.c \
-$(LOCAL_C)
-# end of C_MODULES
+# Where are tools like avr-gcc located on your system?
+ifeq "$(UNAME)" "Darwin"
+AVR_TOOLS_PATH = $(ARDUINO_DIR)/hardware/tools/avr/bin
+else
+AVR_TOOLS_PATH = /usr/bin
+endif
 
-CXX_MODULES = \
-$(ARDUINO)/Tone.cpp \
-$(ARDUINO)/main.cpp \
-$(ARDUINO)/WMath.cpp \
-$(ARDUINO)/Print.cpp \
-$(ARDUINO)/HardwareSerial.cpp \
-$(LOCAL_CXX)
-# end of CXX_MODULES
+ifeq "$(UNAME)" "Darwin"
+  ifeq "$(MODEL)" "uno"
+   PORT ?= /dev/tty.usbmodem*
+  else
+   PORT ?= /dev/tty.usbserial*
+  endif
+else
+ ifeq "$(UNAME)" "Linux"
+  ifeq "$(MODEL)" "uno"
+PORT ?= /dev/ttyACM*
+  else
+PORT ?= /dev/ttyUSB*
+  endif
+ endif
+endif
 
-CXX_APP = applet/$(TARGET).cpp
-MODULES = $(C_MODULES) $(CXX_MODULES)
-SRC = $(C_MODULES)
-CXXSRC = $(CXX_MODULES) $(CXX_APP)
+# How to reset the device before downloading a new program.
+# These don't always work; if the default one doesn't work,
+# try uncommenting one of the others instead.
+ifeq "$(RESET_MODE)" "python"
+ RESET_DEVICE = python -c "import serial; s = serial.SERIAL('/dev/ttyUSB0', 57600); s.setDTR(True); sleep(1); s.setDTR(False)"
+else
+ ifeq "$(RESET_MODE)" "perl"
+  RESET_DEVICE = perl -MDevice::SerialPort -e 'Device::SerialPort->new("/dev/ttyUSB0")->pulse_dtr_on(1000)'
+ else
+  ifeq "$(UNAME)" "Linux"
+   RESET_DEVICE = stty -F $(PORT) hupcl
+  else
+   # BSD uses small f
+   RESET_DEVICE = stty -f $(PORT) hupcl
+  endif
+ endif
+endif
+
+#
+# set up attiny boards.txt path
+#
+ifeq "$(wildcard $(ATTINY_DIR))" ""
+ ATTINY_BOARDS=""
+else
+ ATTINY_BOARDS=$(ATTINY_DIR)/boards.txt
+endif
+
+#
+# Set up values according to what the IDE uses:
+#
+DOWNLOAD_RATE = $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep upload.speed | sed 's/.*=//')
+MCU = $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep build.mcu | sed 's/.*=//')
+F_CPU = $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep build.f_cpu | sed 's/.*=//')
+
+# man avrdude says to use arduino, but the IDE mostly uses stk500.
+# One rumor says that the difference is that arduino does an auto-reset,
+# stk500 doesn't.
+# Might want to grep for upload.protocol as with previous 3 values.
+AVRDUDE_PROGRAMMER = arduino
+
+# This has only been tested on standard variants. I'm guessing
+# at what mega and micro might need; other possibilities are
+# leonardo and "eightanaloginputs".
+ifeq "$(MODEL)" "mega"
+ ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/mega
+else
+ ifeq "$(MODEL)" "micro"
+  ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/micro
+ else
+   ifeq (,$(findstring "tiny",$(MODEL)))
+    ARDUINO_VARIANT=$(ATTINY_DIR)/cores/attiny45_85
+   else
+    ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/standard
+   endif
+ endif
+endif
+
+CWD = $(shell pwd)
+CWDBASE = $(shell basename `pwd`)
+TARFILE = $(TARGET)-$(VERSION).tar.gz
+
+ARDUINO_CORE = $(ARDUINO_DIR)/hardware/arduino/cores/arduino
+# $(ARDUINO_DIR)/hardware/arduino/variants/standard/pins_arduino.c
+SRC = \
+    $(ARDUINO_CORE)/wiring.c \
+    $(ARDUINO_CORE)/wiring_analog.c $(ARDUINO_CORE)/wiring_digital.c \
+    $(ARDUINO_CORE)/wiring_pulse.c \
+    $(ARDUINO_CORE)/wiring_shift.c $(ARDUINO_CORE)/WInterrupts.c \
+    $(foreach l,$(USERLIBS),$(wildcard $(HOME)/sketchbook/libraries/$l/*.c)) \
+    $(foreach l,$(ARDLIBS),$(wildcard $(ARDUINO_DIR)/libraries/$l/*.c))
+
+CXXSRC = $(ARDUINO_CORE)/HardwareSerial.cpp $(ARDUINO_CORE)/WMath.cpp \
+    $(ARDUINO_CORE)/WString.cpp $(ARDUINO_CORE)/Print.cpp \
+    $(foreach l,$(USERLIBS),$(wildcard $(HOME)/sketchbook/libraries/$l/*.cpp)) \
+    $(foreach l,$(ARDLIBS),$(wildcard $(ARDUINO_DIR)/libraries/$l/*.cpp))
+
 FORMAT = ihex
-
 
 # Name of this Makefile (used for "make depend").
 MAKEFILE = Makefile
@@ -100,19 +171,15 @@ MAKEFILE = Makefile
 # Debugging format.
 # Native formats for AVR-GCC's -g are stabs [default], or dwarf-2.
 # AVR (extended) COFF requires stabs, plus an avr-objcopy run.
-#DEBUG = stabs
-DEBUG =
+DEBUG = stabs
 
 OPT = s
 
 # Place -D or -U options here
-CDEFS = -DF_CPU=$(F_CPU)L -DARDUINO=$(VERSION)
-CXXDEFS = -DF_CPU=$(F_CPU)L -DARDUINO=$(VERSION)
+CDEFS = -DF_CPU=$(F_CPU)
 
-# Place -I options here
-ARD_LIB=$(shell find $(INSTALL_LIB_DIR)/*/ $(LOCAL_LIB_DIR)/*/ -type d | tr '\n' ' ' | sed -e 's, /, -I/,g')
-CINCS = -I$(ARDUINO) -I $(ARD_LIB) -I./
-CXXINCS = -I$(ARDUINO) -I $(ARD_LIB) -I./
+# Include directories
+CINCS = -I$(ARDUINO_CORE) -I$(ARDUINO_VARIANT) $(patsubst %,-I$(ARDUINO_DIR)/libraries/%,$(ARDLIBS)) $(patsubst %,-I$(HOME)/sketchbook/libraries/%,$(USERLIBS)) $(patsubst %,-I$(HOME_LIB)/%/,$(USERLIBS))
 
 # Compiler flag to set the C Standard level.
 # c89   - "ANSI" C
@@ -122,86 +189,90 @@ CXXINCS = -I$(ARDUINO) -I $(ARD_LIB) -I./
 #CSTANDARD = -std=gnu99
 CDEBUG = -g$(DEBUG)
 #CWARN = -Wall -Wstrict-prototypes
-#CWARN = -Wall   # show all warnings
-CWARN = -w      # suppress all warnings
-####CTUNING = -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
-CTUNING = -ffunction-sections -fdata-sections
-CXXTUNING = -fno-exceptions -ffunction-sections -fdata-sections
+CTUNING = -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
 #CEXTRA = -Wa,-adhlns=$(<:.c=.lst)
 
-CFLAGS = $(CDEBUG) -O$(OPT) $(CWARN) $(CTUNING) $(CDEFS) $(CINCS) $(CSTANDARD) $(CEXTRA)
-CXXFLAGS = $(CDEBUG) -O$(OPT) $(CWARN) $(CXXTUNING) $(CDEFS) $(CINCS)
-#ASFLAGS = -Wa,-adhlns=$(<:.S=.lst),-gstabs
-LDFLAGS = -O$(OPT) -lm -Wl,--gc-sections
+# Extra flags to match what the Arduino 1.0 IDE is doing:
+# Something about the -ffunction-sections -fdata-sections reduces
+# final text size by roughly half!
+CEXTRA= -g -Os -Wall -fno-exceptions -ffunction-sections -fdata-sections -DARDUINO=100
 
+CFLAGS = $(CDEBUG) $(CDEFS) $(CINCS) -O$(OPT) $(CWARN) $(CSTANDARD) $(CEXTRA)
+CXXFLAGS = $(CDEFS) $(CINCS) -O$(OPT) $(CEXTRA)
+#ASFLAGS = -Wa,-adhlns=$(<:.S=.lst),-gstabs 
+LDFLAGS = -Os -Wl,--gc-sections -mmcu=$(MCU) -lm
 
 # Programming support using avrdude. Settings and variables.
-AVRDUDE_PORT = $(PORT)
 AVRDUDE_WRITE_FLASH = -U flash:w:applet/$(TARGET).hex
-
-#AVRDUDE_FLAGS = -V -F -C $(INSTALL_DIR)/hardware/tools/avr/etc/avrdude.conf \
-
-AVRDUDE_FLAGS = -V -F -C $(INSTALL_DIR)/hardware/tools/avr/etc/avrdude.conf \
--p $(MCU) -P $(AVRDUDE_PORT) -c $(AVRDUDE_PROGRAMMER) \
--b $(UPLOAD_RATE)
+ifeq "$(UNAME)" "Darwin"
+AVRDUDE_CONF = -V -F -C $(ARDUINO_DIR)/hardware/tools/avr/etc/avrdude.conf
+else
+AVRDUDE_CONF = -V -F -C /etc/avrdude.conf
+endif
+AVRDUDE_FLAGS = $(AVRDUDE_CONF) \
+    -p $(MCU) -P $(PORT) -c $(AVRDUDE_PROGRAMMER) \
+    -b $(DOWNLOAD_RATE)
 
 # Program settings
 CC = $(AVR_TOOLS_PATH)/avr-gcc
 CXX = $(AVR_TOOLS_PATH)/avr-g++
-LD = $(AVR_TOOLS_PATH)/avr-gcc
 OBJCOPY = $(AVR_TOOLS_PATH)/avr-objcopy
 OBJDUMP = $(AVR_TOOLS_PATH)/avr-objdump
 AR  = $(AVR_TOOLS_PATH)/avr-ar
 SIZE = $(AVR_TOOLS_PATH)/avr-size
 NM = $(AVR_TOOLS_PATH)/avr-nm
-AVRDUDE = $(AVRDUDE_PATH)/avrdude
+AVRDUDE = $(AVR_TOOLS_PATH)/avrdude
 REMOVE = rm -f
 MV = mv -f
 
 # Define all object files.
 OBJ = $(SRC:.c=.o) $(CXXSRC:.cpp=.o) $(ASRC:.S=.o)
-OBJ_MODULES = $(C_MODULES:.c=.o) $(CXX_MODULES:.cpp=.o)
 
 # Define all listing files.
 LST = $(ASRC:.S=.lst) $(CXXSRC:.cpp=.lst) $(SRC:.c=.lst)
 
 # Combine all necessary flags and optional flags.
 # Add target processor to flags.
-ALL_CFLAGS = $(CFLAGS) -mmcu=$(MCU)
-ALL_CXXFLAGS = $(CXXFLAGS) -mmcu=$(MCU)
-ALL_ASFLAGS = -x assembler-with-cpp $(ASFLAGS) -mmcu=$(MCU)
-ALL_LDFLAGS = $(LDFLAGS) -mmcu=$(MCU)
+ALL_CFLAGS = -mmcu=$(MCU) -I. $(CFLAGS)
+ALL_CXXFLAGS = -mmcu=$(MCU) -I. $(CXXFLAGS)
+ALL_ASFLAGS = -mmcu=$(MCU) -I. -x assembler-with-cpp $(ASFLAGS)
 
 # Default target.
 all: applet_files build sizeafter
 
-build: elf hex
+test:
+	@echo CXXSRC = $(CXXSRC)
+
+build: elf hex 
 
 #applet_files: $(TARGET).pde
+
 applet/$(TARGET).cpp: $(TARGET).pde
 	# Here is the "preprocessing".
 	# It creates a .cpp file based with the same name as the .pde file.
 	# On top of the new .cpp file comes the WProgram.h header.
-	# and prototypes for setup() and Loop()
+	# At the end there is a generic main() function attached,
+	# plus special magic to get around the pure virtual error
+	# undefined reference to `__cxa_pure_virtual' from Print.o.
 	# Then the .cpp file will be compiled. Errors during compile will
-	# refer to this new, automatically generated, file.
+	# refer to this new, automatically generated, file. 
 	# Not the original .pde file you actually edit...
 	test -d applet || mkdir applet
-	echo '#include "WProgram.h"' > applet/$(TARGET).cpp
-	echo 'void setup();' >> applet/$(TARGET).cpp
-	echo 'void loop();' >> applet/$(TARGET).cpp
+	echo '#include "Arduino.h"' > applet/$(TARGET).cpp
 	cat $(TARGET).pde >> applet/$(TARGET).cpp
+	echo 'extern "C" void __cxa_pure_virtual() { while (1) ; }' >> applet/$(TARGET).cpp
+	cat $(ARDUINO_CORE)/main.cpp >> applet/$(TARGET).cpp
 
 elf: applet/$(TARGET).elf
 hex: applet/$(TARGET).hex
 eep: applet/$(TARGET).eep
-lss: applet/$(TARGET).lss
+lss: applet/$(TARGET).lss 
 sym: applet/$(TARGET).sym
 
 # Program the device.  
 upload: applet/$(TARGET).hex
+	$(RESET_DEVICE)
 	$(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_FLASH)
-
 
 	# Display size of file.
 HEXSIZE = $(SIZE) --target=$(FORMAT) applet/$(TARGET).hex
@@ -212,14 +283,12 @@ sizebefore:
 sizeafter:
 	@if [ -f applet/$(TARGET).elf ]; then echo; echo $(MSG_SIZE_AFTER); $(HEXSIZE); echo; fi
 
-
 # Convert ELF to COFF for use in debugging / simulating in AVR Studio or VMLAB.
 COFFCONVERT=$(OBJCOPY) --debugging \
---change-section-address .data-0x800000 \
---change-section-address .bss-0x800000 \
---change-section-address .noinit-0x800000 \
---change-section-address .eeprom-0x810000
-
+    --change-section-address .data-0x800000 \
+    --change-section-address .bss-0x800000 \
+    --change-section-address .noinit-0x800000 \
+    --change-section-address .eeprom-0x810000 
 
 coff: applet/$(TARGET).elf
 	$(COFFCONVERT) -O coff-avr applet/$(TARGET).elf $(TARGET).cof
@@ -228,16 +297,14 @@ coff: applet/$(TARGET).elf
 extcoff: $(TARGET).elf
 	$(COFFCONVERT) -O coff-ext-avr applet/$(TARGET).elf $(TARGET).cof
 
-
 .SUFFIXES: .elf .hex .eep .lss .sym
 
 .elf.hex:
 	$(OBJCOPY) -O $(FORMAT) -R .eeprom $< $@
 
 .elf.eep:
-	$(OBJCOPY) -O $(FORMAT) -j .eeprom --set-section-flags=.eeprom="alloc,load" \
-	--no-change-warnings \
-	--change-section-lma .eeprom=0 $< $@
+	-$(OBJCOPY) -j .eeprom --set-section-flags=.eeprom="alloc,load" \
+	--change-section-lma .eeprom=0 -O $(FORMAT) $< $@
 
 # Create extended listing file from ELF output file.
 .elf.lss:
@@ -248,22 +315,22 @@ extcoff: $(TARGET).elf
 	$(NM) -n $< > $@
 
 	# Link: create ELF output file from library.
-#applet/$(TARGET).elf: $(TARGET).pde applet/core.a
-applet/$(TARGET).elf: applet/$(TARGET).o applet/core.a
-	$(LD) $(ALL_LDFLAGS) -o $@ applet/$(TARGET).o applet/core.a
+applet/$(TARGET).elf: applet/$(TARGET).o applet/core.a 
+	$(CC) -o $@ applet/$(TARGET).o -L. applet/core.a $(LDFLAGS)
 
-applet/core.a: $(OBJ_MODULES)
-	@for i in $(OBJ_MODULES); do echo $(AR) rcs applet/core.a $$i; $(AR) rcs applet/core.a $$i; done
+#applet/$(TARGET).elf: applet/$(TARGET).o applet/core.a 
+#	$(CC) $(ALL_CFLAGS) -o $@ applet/$(TARGET).cpp -L. applet/core.a $(LDFLAGS)
 
-
+applet/core.a: $(OBJ)
+	@for i in $(OBJ); do echo $(AR) rcs applet/core.a $$i; $(AR) rcs applet/core.a $$i; done
 
 # Compile: create object files from C++ source files.
 .cpp.o:
-	$(CXX) -c $(ALL_CXXFLAGS) $< -o $@
+	$(CXX) -c $(ALL_CXXFLAGS) $< -o $@ 
 
 # Compile: create object files from C source files.
 .c.o:
-	$(CC) -c $(ALL_CFLAGS) $< -o $@
+	$(CC) -c $(ALL_CFLAGS) $< -o $@ 
 
 
 # Compile: create assembler files from C source files.
@@ -275,23 +342,39 @@ applet/core.a: $(OBJ_MODULES)
 .S.o:
 	$(CC) -c $(ALL_ASFLAGS) $< -o $@
 
-
-# Automatic dependencies
-%.d: %.c
-	$(CC) -M $(ALL_CFLAGS) $< | sed "s;$(notdir $*).o:;$*.o $*.d:;" > $@
-
-%.d: %.cpp
-	$(CXX) -M $(ALL_CXXFLAGS) $< | sed "s;$(notdir $*).o:;$*.o $*.d:;" > $@
-
-
 # Target: clean project.
 clean:
 	$(REMOVE) applet/$(TARGET).hex applet/$(TARGET).eep applet/$(TARGET).cof applet/$(TARGET).elf \
 	applet/$(TARGET).map applet/$(TARGET).sym applet/$(TARGET).lss applet/core.a \
 	$(OBJ) $(LST) $(SRC:.c=.s) $(SRC:.c=.d) $(CXXSRC:.cpp=.s) $(CXXSRC:.cpp=.d)
 
-.PHONY:	all build elf hex eep lss sym program coff extcoff clean applet_files sizebefore sizeafter
+flush:
+	$(REMOVE) -rf applet/ \
+	$(REMOVE) $(OBJ) $(LST) $(SRC:.c=.s) $(SRC:.c=.d) $(CXXSRC:.cpp=.s) $(CXXSRC:.cpp=.d)
 
-#include $(SRC:.c=.d)
-#include $(CXXSRC:.cpp=.d) 
+list:
+	# LIST OF ALL THE BOARDS AVAILABLE AS TARGETS FOR $$MODEL ENV VARIABLE
+	@cat $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep '.name' | sed 's/\(.*\)\.name=\(.*\)/MODEL=\1			-> \2/'
+
+tar: $(TARFILE)
+
+$(TARFILE): 
+	( cd .. && \
+	  tar czvf $(TARFILE) --exclude=applet --owner=root $(CWDBASE) && \
+	  mv $(TARFILE) $(CWD) && \
+	  echo Created $(TARFILE) \
+	)
+
+depend:
+	if grep '^# DO NOT DELETE' $(MAKEFILE) >/dev/null; \
+	then \
+		sed -e '/^# DO NOT DELETE/,$$d' $(MAKEFILE) > \
+			$(MAKEFILE).$$$$ && \
+		$(MV) $(MAKEFILE).$$$$ $(MAKEFILE); \
+	fi
+	echo '# DO NOT DELETE THIS LINE -- make depend depends on it.' \
+		>> $(MAKEFILE); \
+	$(CC) -M -mmcu=$(MCU) $(CDEFS) $(CINCS) $(SRC) $(ASRC) >> $(MAKEFILE)
+
+.PHONY:	all build elf hex eep lss sym program coff extcoff clean depend applet_files sizebefore sizeafter
 
