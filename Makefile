@@ -39,7 +39,7 @@
 VERSION = 0.1
 
 # Standard Arduino libraries it will import, e.g. LiquidCrystal:
-ARDLIBS = SoftwareSerial
+ARDLIBS = 
 
 # User-specified (in ~/sketchbook/libraries/) libraries (untested):
 USERLIBS = 
@@ -55,7 +55,7 @@ UNAME = $(shell uname)
 TARGET = $(shell basename $(PWD))
 
 # Where do you keep the official Arduino software package?
-ARDUINO_DIR = /Applications/Arduino10.app/Contents/Resources/Java
+ARDUINO_DIR = /Applications/Arduino.app/Contents/Resources/Java
 HOME_LIB = $(HOME)/Documents/Arduino/libraries
 # path to ATTiny files look at http://hlt.media.mit.edu/?p=1229
 ATTINY_DIR=$(ARDUINO_DIR)/hardware/attiny45_85
