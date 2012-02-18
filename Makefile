@@ -145,7 +145,7 @@ else
  ifeq "$(MODEL)" "micro"
   ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/micro
  else
-   ifeq (,$(findstring "tiny",$(MODEL)))
+   ifneq (,$(findstring "tiny",$(MODEL)))
     ARDUINO_VARIANT=$(ATTINY_DIR)/cores/attiny45_85
    else
     ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/standard
