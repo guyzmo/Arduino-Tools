@@ -65,11 +65,7 @@ else
 endif
 
 # Name of the program and source .pde file:
-ifeq "$(UNAME)" "Windows"
- TARGET = $(shell for %i in $(PWD) do @echo %~nxi) # XXX needs to be tested
-else
- TARGET = $(shell basename $(PWD))
-endif
+TARGET = $(shell basename $(PWD))
 
 # Where do you keep the official Arduino software package?
 ARDUINO_DIR = /Applications/Arduino.app/Contents/Resources/Java
@@ -82,14 +78,10 @@ ATTINY_DIR=$(ARDUINO_DIR)/hardware/attiny45_85
 ############################################################################
 
 # Where are tools like avr-gcc located on your system?
-ifeq "$(UNAME)" "Windows"
-  AVR_TOOLS_PATH = $(ARDUINO_DIR)/hardware/tools/avr/bin #XXX needs to be checked !
+ifeq "$(UNAME)" "Darwin"
+ AVR_TOOLS_PATH = $(ARDUINO_DIR)/hardware/tools/avr/bin
 else
- ifeq "$(UNAME)" "Darwin"
-  AVR_TOOLS_PATH = $(ARDUINO_DIR)/hardware/tools/avr/bin
- else
-  AVR_TOOLS_PATH = /usr/bin
- endif
+ AVR_TOOLS_PATH = /usr/bin
 endif
 
 ifeq "$(UNAME)" "Windows"
@@ -138,7 +130,7 @@ endif
 # set up attiny boards.txt path
 #
 ifeq "$(wildcard $(ATTINY_DIR))" ""
- ATTINY_BOARDS=""
+ ATTINY_BOARDS=
 else
  ATTINY_BOARDS=$(ATTINY_DIR)/boards.txt
 endif
@@ -154,7 +146,11 @@ F_CPU = $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(
 # One rumor says that the difference is that arduino does an auto-reset,
 # stk500 doesn't.
 # Might want to grep for upload.protocol as with previous 3 values.
-AVRDUDE_PROGRAMMER = arduino
+ifneq ($(findstring "tiny",$(MODEL)),)
+ AVRDUDE_PROGRAMMER =  $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep upload.using | sed 's/.*://')
+else
+ AVRDUDE_PROGRAMMER = $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep upload.protocol | sed 's/.*=//')
+endif
 
 # This has only been tested on standard variants. I'm guessing
 # at what mega and micro might need; other possibilities are
@@ -165,7 +161,7 @@ else
  ifeq "$(MODEL)" "micro"
   ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/micro
  else
-   ifneq (,$(findstring "tiny",$(MODEL)))
+   ifneq ($(findstring "tiny",$(MODEL)),)
     ARDUINO_VARIANT=$(ATTINY_DIR)/cores/attiny45_85
    else
     ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/standard
@@ -173,11 +169,7 @@ else
  endif
 endif
 
-ifeq "$(UNAME)" "Windows"
- CWDBASE = $(shell for %i in $(PWD) do @echo %~nxi) # XXX needs to be tested
-else
- CWDBASE = $(shell basename $(PWD))
-endif
+CWDBASE = $(shell basename $(PWD))
 TARFILE = $(TARGET)-$(VERSION).tar.gz
 
 ARDUINO_CORE = $(ARDUINO_DIR)/hardware/arduino/cores/arduino
@@ -277,8 +269,7 @@ test:
 
 build: elf hex 
 
-#applet_files: $(TARGET).pde
-
+ifneq "$(wildcard $(TARGET).pde)" ""
 applet/$(TARGET).cpp: $(TARGET).pde
 	# Here is the "preprocessing".
 	# It creates a .cpp file based with the same name as the .pde file.
@@ -294,6 +285,29 @@ applet/$(TARGET).cpp: $(TARGET).pde
 	cat $(TARGET).pde >> applet/$(TARGET).cpp
 	echo 'extern "C" void __cxa_pure_virtual() { while (1) ; }' >> applet/$(TARGET).cpp
 	cat $(ARDUINO_CORE)/main.cpp >> applet/$(TARGET).cpp
+else
+ ifneq "$(wildcard $(TARGET).ino)" ""
+applet/$(TARGET).cpp: $(TARGET).ino
+	# Here is the "preprocessing".
+	# It creates a .cpp file based with the same name as the .ino file.
+	# On top of the new .cpp file comes the WProgram.h header.
+	# At the end there is a generic main() function attached,
+	# plus special magic to get around the pure virtual error
+	# undefined reference to `__cxa_pure_virtual' from Print.o.
+	# Then the .cpp file will be compiled. Errors during compile will
+	# refer to this new, automatically generated, file. 
+	# Not the original .ino file you actually edit...
+	test -d applet || mkdir applet
+	echo '#include "Arduino.h"' > applet/$(TARGET).cpp
+	cat $(TARGET).ino >> applet/$(TARGET).cpp
+	echo 'extern "C" void __cxa_pure_virtual() { while (1) ; }' >> applet/$(TARGET).cpp
+	cat $(ARDUINO_CORE)/main.cpp >> applet/$(TARGET).cpp
+else
+applet/$(TARGET).cpp:
+	@echo "FAILURE: Missing .pde or .ino file in current directory !"
+	@exit 2
+endif
+endif
 
 elf: applet/$(TARGET).elf
 hex: applet/$(TARGET).hex
@@ -376,7 +390,7 @@ applet/core.a: $(OBJ)
 
 # Target: clean project.
 clean:
-	$(REMOVE) applet/$(TARGET).hex applet/$(TARGET).eep applet/$(TARGET).cof applet/$(TARGET).elf \
+	$(REMOVE) applet/$(TARGET).eep applet/$(TARGET).cof applet/$(TARGET).elf \
 	applet/$(TARGET).map applet/$(TARGET).sym applet/$(TARGET).lss applet/core.a \
 	$(OBJ) $(LST) $(SRC:.c=.s) $(SRC:.c=.d) $(CXXSRC:.cpp=.s) $(CXXSRC:.cpp=.d)
 
