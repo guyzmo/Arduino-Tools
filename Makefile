@@ -1,7 +1,8 @@
 # Makefile for building Arduino sketches with Arduino 1.0.
 #
-# Makefile-arduino v0.8 by Bernard Pratz <guyzmo@hackable-devices.org>
+# Makefile-arduino v0.8 by Bernard Pratz <guyzmo{at}hackable-devices.org>
 # I release my changes under WTFPL2.0 licence, contact other authors for their favorite licences.
+# Updates on : https://github.com/guyzmo/Arduino-Tools/blob/master/Makefile
 #
 # Makefile-arduino v0.7 by Akkana Peck <akkana@shallowsky.com>
 # Adapted from a long-ago Arduino 0011 Makefile by mellis, eighthave, oli.keller
