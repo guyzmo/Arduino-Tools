@@ -401,7 +401,10 @@ flush:
 
 list:
 	# LIST OF ALL THE BOARDS AVAILABLE AS TARGETS FOR $$MODEL ENV VARIABLE
-	@cat $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep '.name' | sed 's/\(.*\)\.name=\(.*\)/MODEL=\1			-> \2/'
+	@cat $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) \
+					| grep '.name' \
+					| sed 's/\(.*\)\.name=\(.*\)/MODEL=\1;\2/' \
+					| column -t -s';'
 
 tar: $(TARFILE)
 
