@@ -180,12 +180,12 @@ SRC = \
     $(ARDUINO_CORE)/wiring_analog.c $(ARDUINO_CORE)/wiring_digital.c \
     $(ARDUINO_CORE)/wiring_pulse.c \
     $(ARDUINO_CORE)/wiring_shift.c $(ARDUINO_CORE)/WInterrupts.c \
-    $(foreach l,$(USERLIBS),$(wildcard $(HOME)/sketchbook/libraries/$l/*.c)) \
+    $(foreach l,$(USERLIBS),$(wildcard $(HOME_LIB)/$l/*.c)) \
     $(foreach l,$(ARDLIBS),$(wildcard $(ARDUINO_DIR)/libraries/$l/*.c))
 
 CXXSRC = $(ARDUINO_CORE)/HardwareSerial.cpp $(ARDUINO_CORE)/WMath.cpp \
     $(ARDUINO_CORE)/WString.cpp $(ARDUINO_CORE)/Print.cpp \
-    $(foreach l,$(USERLIBS),$(wildcard $(HOME)/sketchbook/libraries/$l/*.cpp)) \
+    $(foreach l,$(USERLIBS),$(wildcard $(HOME_LIB)/$l/*.cpp)) \
     $(foreach l,$(ARDLIBS),$(wildcard $(ARDUINO_DIR)/libraries/$l/*.cpp))
 
 FORMAT = ihex
@@ -204,7 +204,7 @@ OPT = s
 CDEFS = -DF_CPU=$(F_CPU)
 
 # Include directories
-CINCS = -I$(ARDUINO_CORE) -I$(ARDUINO_VARIANT) $(patsubst %,-I$(ARDUINO_DIR)/libraries/%,$(ARDLIBS)) $(patsubst %,-I$(HOME)/sketchbook/libraries/%,$(USERLIBS)) $(patsubst %,-I$(HOME_LIB)/%/,$(USERLIBS))
+CINCS = -I$(ARDUINO_CORE) -I$(ARDUINO_VARIANT) $(patsubst %,-I$(ARDUINO_DIR)/libraries/%,$(ARDLIBS)) $(patsubst %,-I$(HOME_LIB)/%,$(USERLIBS)) $(patsubst %,-I$(HOME_LIB)/%/,$(USERLIBS))
 
 # Compiler flag to set the C Standard level.
 # c89   - "ANSI" C
