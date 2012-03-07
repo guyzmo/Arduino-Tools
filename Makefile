@@ -47,11 +47,16 @@ VERSION = 0.1
 # Standard Arduino libraries it will import, e.g. LiquidCrystal:
 ARDLIBS = 
 
-# User-specified (in ~/sketchbook/libraries/) libraries (untested):
+# User-specified (in ~/sketchbook/libraries/) libraries :
 USERLIBS = 
 
+# Libs in local directory for current project
+# uncomment value if you have libs in directories inside current project's directory
+LOCALLIBS = # $(patsubst applet/,,$(wildcard */))
+
 # Arduino model:
-# You can set this to be a string, such as uno, atmega328, diecimila and mega,
+# You can set this to be a string, such as uno, atmega328...
+# do 'make list' for a full list of supported models
 MODEL ?= uno
 
 ############################################################################
@@ -69,10 +74,10 @@ endif
 TARGET = $(shell basename $(PWD))
 
 # Where do you keep the official Arduino software package?
-ARDUINO_DIR = /Applications/Arduino.app/Contents/Resources/Java
+ARDUINO_DIR = /Applications/Arduino10.app/Contents/Resources/Java
 HOME_LIB = $(HOME)/Documents/Arduino/libraries
-# path to ATTiny files look at http://hlt.media.mit.edu/?p=1695
-ATTINY_DIR=$(ARDUINO_DIR)/hardware/attiny45_85
+# path to ATTiny files look at http://code.google.com/p/arduino-tiny/
+ATTINY_DIR=$(ARDUINO_DIR)/hardware/tiny
 
 ############################################################################
 # Below here nothing should need to be changed. Cross your fingers!
@@ -139,54 +144,60 @@ endif
 #
 # Set up values according to what the IDE uses:
 #
-DOWNLOAD_RATE = $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep upload.speed | sed 's/.*=//')
+UPLOAD_RATE ?= $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep upload.speed | sed 's/.*=//')
 MCU = $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep build.mcu | sed 's/.*=//')
 F_CPU = $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep build.f_cpu | sed 's/.*=//')
 
 # man avrdude says to use arduino, but the IDE mostly uses stk500.
-# One rumor says that the difference is that arduino does an auto-reset,
-# stk500 doesn't.
+# One rumor says that the difference is that arduino does an auto-reset, stk500 doesn't.
 # Might want to grep for upload.protocol as with previous 3 values.
-ifneq ($(findstring "tiny",$(MODEL)),)
- AVRDUDE_PROGRAMMER =  $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep upload.using | sed 's/.*://')
+ifneq ($(findstring tiny,$(MODEL)),)
+ AVRDUDE_PROGRAMMER =  $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep upload.using | sed 's/.*=\(.*\):.*/\1/')
+ ARDUINO_CORE=$(ATTINY_DIR)/cores/tiny
+ ARDUINO_VARIANT=$(ATTINY_DIR)/cores/tiny
+ ARDUINO_PROG_HEADER=WProgram.h
+ SRC=$(ARDUINO_CORE)/pins_arduino.c
+ ifeq ($(UPLOAD_RATE),)
+   UPLOAD_RATE=9600
+ endif
 else
  AVRDUDE_PROGRAMMER = $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep upload.protocol | sed 's/.*=//')
-endif
+ ARDUINO_CORE=$(ARDUINO_DIR)/hardware/arduino/cores/arduino
+ ARDUINO_PROG_HEADER=Arduino.h
+ SRC=
 
-# This has only been tested on standard variants. I'm guessing
-# at what mega and micro might need; other possibilities are
-# leonardo and "eightanaloginputs".
-ifeq "$(MODEL)" "mega"
- ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/mega
-else
- ifeq "$(MODEL)" "micro"
-  ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/micro
+ # This has only been tested on standard variants. I'm guessing
+ # at what mega and micro might need; other possibilities are
+ # leonardo and "eightanaloginputs".
+ ifeq "$(MODEL)" "mega"
+  ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/mega
  else
-   ifneq ($(findstring "tiny",$(MODEL)),)
-    ARDUINO_VARIANT=$(ATTINY_DIR)/cores/attiny45_85
-   else
-    ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/standard
-   endif
+  ifeq "$(MODEL)" "micro"
+   ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/micro
+  else
+   ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/standard
+  endif
  endif
 endif
 
 CWDBASE = $(shell basename $(PWD))
 TARFILE = $(TARGET)-$(VERSION).tar.gz
 
-ARDUINO_CORE = $(ARDUINO_DIR)/hardware/arduino/cores/arduino
 # $(ARDUINO_DIR)/hardware/arduino/variants/standard/pins_arduino.c
-SRC = \
+SRC += \
     $(ARDUINO_CORE)/wiring.c \
     $(ARDUINO_CORE)/wiring_analog.c $(ARDUINO_CORE)/wiring_digital.c \
     $(ARDUINO_CORE)/wiring_pulse.c \
     $(ARDUINO_CORE)/wiring_shift.c $(ARDUINO_CORE)/WInterrupts.c \
+    $(foreach l,$(ARDLIBS),$(wildcard $(ARDUINO_DIR)/libraries/$l/*.c)) \
     $(foreach l,$(USERLIBS),$(wildcard $(HOME_LIB)/$l/*.c)) \
-    $(foreach l,$(ARDLIBS),$(wildcard $(ARDUINO_DIR)/libraries/$l/*.c))
+    $(foreach l,$(LOCALLIBS),$(wildcard $l/*.c))
 
 CXXSRC = $(ARDUINO_CORE)/HardwareSerial.cpp $(ARDUINO_CORE)/WMath.cpp \
     $(ARDUINO_CORE)/WString.cpp $(ARDUINO_CORE)/Print.cpp \
+    $(foreach l,$(ARDLIBS),$(wildcard $(ARDUINO_DIR)/libraries/$l/*.cpp)) \
     $(foreach l,$(USERLIBS),$(wildcard $(HOME_LIB)/$l/*.cpp)) \
-    $(foreach l,$(ARDLIBS),$(wildcard $(ARDUINO_DIR)/libraries/$l/*.cpp))
+    $(foreach l,$(LOCALLIBS),$(wildcard $l/*.cpp))
 
 FORMAT = ihex
 
@@ -204,7 +215,10 @@ OPT = s
 CDEFS = -DF_CPU=$(F_CPU)
 
 # Include directories
-CINCS = -I$(ARDUINO_CORE) -I$(ARDUINO_VARIANT) $(patsubst %,-I$(ARDUINO_DIR)/libraries/%,$(ARDLIBS)) $(patsubst %,-I$(HOME_LIB)/%,$(USERLIBS)) $(patsubst %,-I$(HOME_LIB)/%/,$(USERLIBS))
+CINCS = -I$(ARDUINO_CORE) -I$(ARDUINO_VARIANT) \
+		$(patsubst %,-I$(ARDUINO_DIR)/libraries/%,$(ARDLIBS)) \
+		$(patsubst %,-I$(HOME_LIB)/%,$(USERLIBS)) \
+		$(patsubst %,-I%/,$(LOCALLIBS))
 
 # Compiler flag to set the C Standard level.
 # c89   - "ANSI" C
@@ -236,7 +250,7 @@ AVRDUDE_CONF = -V -F -C /etc/avrdude.conf
 endif
 AVRDUDE_FLAGS = $(AVRDUDE_CONF) \
     -p $(MCU) -P $(PORT) -c $(AVRDUDE_PROGRAMMER) \
-    -b $(DOWNLOAD_RATE)
+    -b $(UPLOAD_RATE)
 
 # Program settings
 CC = $(AVR_TOOLS_PATH)/avr-gcc
@@ -282,7 +296,7 @@ applet/$(TARGET).cpp: $(TARGET).pde
 	# refer to this new, automatically generated, file. 
 	# Not the original .pde file you actually edit...
 	test -d applet || mkdir applet
-	echo '#include "Arduino.h"' > applet/$(TARGET).cpp
+	echo '#include "$(ARDUINO_PROG_HEADER)"' > applet/$(TARGET).cpp
 	cat $(TARGET).pde >> applet/$(TARGET).cpp
 	echo 'extern "C" void __cxa_pure_virtual() { while (1) ; }' >> applet/$(TARGET).cpp
 	cat $(ARDUINO_CORE)/main.cpp >> applet/$(TARGET).cpp
@@ -299,7 +313,7 @@ applet/$(TARGET).cpp: $(TARGET).ino
 	# refer to this new, automatically generated, file. 
 	# Not the original .ino file you actually edit...
 	test -d applet || mkdir applet
-	echo '#include "Arduino.h"' > applet/$(TARGET).cpp
+	echo '#include "$(ARDUINO_PROG_HEADER)"' > applet/$(TARGET).cpp
 	cat $(TARGET).ino >> applet/$(TARGET).cpp
 	echo 'extern "C" void __cxa_pure_virtual() { while (1) ; }' >> applet/$(TARGET).cpp
 	cat $(ARDUINO_CORE)/main.cpp >> applet/$(TARGET).cpp
