@@ -36,7 +36,15 @@
 # if reset does not work, add RESET_MODE='python' or RESET_MODE='perl' to your env
 #  * Perl version needs libdevice-serialport-perl :
 #  * Python version needs python-serial :
-# if you want to compile against ATTiny, see ATTINY_DIR below.
+#
+# If you want to support other hardwares, add them to the hardware directory and make
+# so it contains at the root:
+#  - boards.txt
+#  - cores/
+#  - bootloaders/
+#  - variants/pins_arduino.h
+# The only exception being for the ATTINY, which does not contain a variants directory
+# To download the attiny boards support, have a look at http://code.google.com/p/arduino-tiny/
 
 ############################################################################
 # Project's settings
@@ -52,12 +60,18 @@ USERLIBS =
 
 # Libs in local directory for current project
 # uncomment value if you have libs in directories inside current project's directory
-LOCALLIBS = # $(patsubst applet/,,$(wildcard */))
+LOCALLIBS = 
 
 # Arduino model:
 # You can set this to be a string, such as uno, atmega328...
 # do 'make list' for a full list of supported models
 MODEL ?= uno
+
+# Here you can define 
+DEFINES ?=
+
+# 
+TERM_SPEED ?= 115200
 
 ############################################################################
 # Platform's settings
@@ -74,10 +88,16 @@ endif
 TARGET = $(shell basename $(PWD))
 
 # Where do you keep the official Arduino software package?
-ARDUINO_DIR = /Applications/Arduino10.app/Contents/Resources/Java
+ifeq "$(UNAME)" "Darwin"
+  ARDUINO_DIR = /Applications/Arduino.app/Contents/Resources/Java
+ else
+  ifeq "$(UNAME)" "Linux"
+   ARDUINO_DIR = /usr/share/arduino
+  endif
+endif
 HOME_LIB = $(HOME)/Documents/Arduino/libraries
-# path to ATTiny files look at http://code.google.com/p/arduino-tiny/
-ATTINY_DIR=$(ARDUINO_DIR)/hardware/tiny
+BOARDS=$(wildcard $(ARDUINO_DIR)/hardware/*/boards.txt)
+ATTINY_DIR=$(shell grep attiny /Applications/Arduino.app/Contents/Resources/Java/hardware/*/boards.txt | tail -1 | sed 's/boards\.txt.*//')
 
 ############################################################################
 # Below here nothing should need to be changed. Cross your fingers!
@@ -94,14 +114,14 @@ ifeq "$(UNAME)" "Windows"
  PORT ?= COM1 #XXX needs to be checked !
 else
  ifeq "$(UNAME)" "Darwin"
-  ifeq "$(MODEL)" "uno"
+  ifeq ($(MODEL),$(filter $(MODEL),uno leonardo))
    PORT ?= /dev/tty.usbmodem*
   else
    PORT ?= /dev/tty.usbserial*
   endif
  else
   ifeq "$(UNAME)" "Linux"
-   ifeq "$(MODEL)" "uno"
+   ifeq ($(MODEL),$(filter $(MODEL),uno leonardo))
     PORT ?= /dev/ttyACM*
    else
     PORT ?= /dev/ttyUSB*
@@ -114,10 +134,10 @@ endif
 # These don't always work; if the default one doesn't work,
 # try uncommenting one of the others instead.
 ifeq "$(RESET_MODE)" "python"
- RESET_DEVICE = python -c "import serial; s = serial.SERIAL('/dev/ttyUSB0', 57600); s.setDTR(True); sleep(1); s.setDTR(False)"
+ RESET_DEVICE = python -c "import serial; s = serial.SERIAL('$(PORT)', 57600); s.setDTR(True); sleep(1); s.setDTR(False)"
 else
  ifeq "$(RESET_MODE)" "perl"
-  RESET_DEVICE = perl -MDevice::SerialPort -e 'Device::SerialPort->new("/dev/ttyUSB0")->pulse_dtr_on(1000)'
+  RESET_DEVICE = perl -MDevice::SerialPort -e 'Device::SerialPort->new("$(PORT)")->pulse_dtr_on(1000)'
  else
   ifeq "$(UNAME)" "Windows"
    RESET_DEVICE = echo "CAN'T RESET DEVICE ON WINDOWS !"
@@ -131,28 +151,35 @@ else
   endif
  endif
 endif
+# add 4 seconds of wait after reseting a leonardo device
+ifeq "$(MODEL)" "leonardo"
+ RESET_DEVICE="$(RESET_DEVICE);sleep 4"
+endif
 
-#
-# set up attiny boards.txt path
-#
-ifeq "$(wildcard $(ATTINY_DIR))" ""
- ATTINY_BOARDS=
+ifneq "$(shell which miniterm.py)" "miniterm.py not found"
+ TERM=$(shell which miniterm.py) $(TERM_SPEED) $(PORT)
 else
- ATTINY_BOARDS=$(ATTINY_DIR)/boards.txt
+ ifneq $(shell which screen), "screen not found"
+  TERM=$(shell which screen) $(TERM_SPEED) $(PORT)
+ else
+  $(warning screen or miniterm not found. Cannot run terminal)
+  TERM=
+ endif
 endif
 
 #
 # Set up values according to what the IDE uses:
 #
-UPLOAD_RATE ?= $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep upload.speed | sed 's/.*=//')
-MCU = $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep build.mcu | sed 's/.*=//')
-F_CPU = $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep build.f_cpu | sed 's/.*=//')
+VARIANT ?= $(shell grep "^$(MODEL)\." $(BOARDS) | grep build.variant | sed 's/.*=//')
+UPLOAD_RATE ?= $(shell grep "^$(MODEL)\." $(BOARDS) | grep upload.speed | sed 's/.*=//')
+MCU = $(shell grep "^$(MODEL)\." $(BOARDS) | grep build.mcu | sed 's/.*=//')
+F_CPU = $(shell grep "^$(MODEL)\." $(BOARDS) | grep build.f_cpu | sed 's/.*=//')
 
 # man avrdude says to use arduino, but the IDE mostly uses stk500.
 # One rumor says that the difference is that arduino does an auto-reset, stk500 doesn't.
 # Might want to grep for upload.protocol as with previous 3 values.
 ifneq ($(findstring tiny,$(MODEL)),)
- AVRDUDE_PROGRAMMER =  $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep upload.using | sed 's/.*=\(.*\):.*/\1/')
+ AVRDUDE_PROGRAMMER =  $(shell grep "^$(MODEL)\." $(BOARDS) | grep upload.using | sed 's/.*=\(.*\):.*/\1/')
  ARDUINO_CORE=$(ATTINY_DIR)/cores/tiny
  ARDUINO_VARIANT=$(ATTINY_DIR)/cores/tiny
  ARDUINO_PROG_HEADER=WProgram.h
@@ -161,7 +188,7 @@ ifneq ($(findstring tiny,$(MODEL)),)
    UPLOAD_RATE=9600
  endif
 else
- AVRDUDE_PROGRAMMER = $(shell grep "^$(MODEL)\." $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) | grep upload.protocol | sed 's/.*=//')
+ AVRDUDE_PROGRAMMER = $(shell grep "^$(MODEL)\." $(BOARDS) | grep upload.protocol | sed 's/.*=//')
  ARDUINO_CORE=$(ARDUINO_DIR)/hardware/arduino/cores/arduino
  ARDUINO_PROG_HEADER=Arduino.h
  SRC=
@@ -175,7 +202,11 @@ else
   ifeq "$(MODEL)" "micro"
    ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/micro
   else
-   ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/standard
+   ifeq "$(MODEL)" "leonardo"
+    ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/leonardo
+   else
+    ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/$(VARIANT)
+   endif
   endif
  endif
 endif
@@ -195,6 +226,7 @@ SRC += \
 
 CXXSRC = $(ARDUINO_CORE)/HardwareSerial.cpp $(ARDUINO_CORE)/WMath.cpp \
     $(ARDUINO_CORE)/WString.cpp $(ARDUINO_CORE)/Print.cpp \
+	$(ARDUINO_CORE)/USBCore.cpp $(ARDUINO_CORE)/HID.cpp $(ARDUINO_CORE)/CDC.cpp \
     $(foreach l,$(ARDLIBS),$(wildcard $(ARDUINO_DIR)/libraries/$l/*.cpp)) \
     $(foreach l,$(USERLIBS),$(wildcard $(HOME_LIB)/$l/*.cpp)) \
     $(foreach l,$(LOCALLIBS),$(wildcard $l/*.cpp))
@@ -212,7 +244,13 @@ DEBUG = stabs
 OPT = s
 
 # Place -D or -U options here
-CDEFS = -DF_CPU=$(F_CPU)
+ifeq "$(MODEL)" "leonardo"
+ CDEFS = -DF_CPU=$(F_CPU) -DUSB_VID=0x2341 -DUSB_PID=0x0036
+else
+ CDEFS = -DF_CPU=$(F_CPU)
+endif
+
+PPDEFINES = $(foreach DEFINE,$(DEFINES),-D$(DEFINE))
 
 # Include directories
 CINCS = -I$(ARDUINO_CORE) -I$(ARDUINO_VARIANT) \
@@ -225,9 +263,10 @@ CINCS = -I$(ARDUINO_CORE) -I$(ARDUINO_VARIANT) \
 # gnu89 - c89 plus GCC extensions
 # c99   - ISO C99 standard (not yet fully implemented)
 # gnu99 - c99 plus GCC extensions
-#CSTANDARD = -std=gnu99
+CSTANDARD = -std=gnu99
+CXXSTANDARD = -std=gnu++11
 CDEBUG = -g$(DEBUG)
-#CWARN = -Wall -Wstrict-prototypes
+CWARN = -Wall -Wstrict-prototypes
 CTUNING = -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
 #CEXTRA = -Wa,-adhlns=$(<:.c=.lst)
 
@@ -236,8 +275,8 @@ CTUNING = -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
 # final text size by roughly half!
 CEXTRA= -g -Os -Wall -fno-exceptions -ffunction-sections -fdata-sections -DARDUINO=100
 
-CFLAGS = $(CDEBUG) $(CDEFS) $(CINCS) -O$(OPT) $(CWARN) $(CSTANDARD) $(CEXTRA)
-CXXFLAGS = $(CDEFS) $(CINCS) -O$(OPT) $(CEXTRA)
+CFLAGS = $(CDEBUG) $(PPDEFINES) $(CDEFS) $(CINCS) -O$(OPT) $(CWARN) $(CSTANDARD) $(CEXTRA)
+CXXFLAGS = $(CDEFS) $(PPDEFINES) $(CINCS) -O$(OPT) $(CXXSTANDARD) $(CEXTRA)
 #ASFLAGS = -Wa,-adhlns=$(<:.S=.lst),-gstabs 
 LDFLAGS = -Os -Wl,--gc-sections -mmcu=$(MCU) -lm
 
@@ -415,10 +454,12 @@ flush:
 
 list:
 	# LIST OF ALL THE BOARDS AVAILABLE AS TARGETS FOR $$MODEL ENV VARIABLE
-	@cat $(ARDUINO_DIR)/hardware/arduino/boards.txt $(ATTINY_BOARDS) \
-					| grep '.name' \
+	@cat $(BOARDS)  | grep '.name' \
 					| sed 's/\(.*\)\.name=\(.*\)/MODEL=\1;\2/' \
 					| column -t -s';'
+
+term:
+	$(TERM)
 
 tar: $(TARFILE)
 
