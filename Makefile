@@ -73,6 +73,12 @@ DEFINES ?=
 # 
 TERM_SPEED ?= 115200
 
+# in case you're using an external programmer, or you want to give more options, eg:
+#	dragon_isp
+#   avr_isp -e
+#   wiring -e
+PROGRAMMER ?=
+
 ############################################################################
 # Platform's settings
 ############################################################################
@@ -171,6 +177,7 @@ endif
 # Set up values according to what the IDE uses:
 #
 VARIANT ?= $(shell grep "^$(MODEL)\." $(BOARDS) | grep build.variant | sed 's/.*=//')
+VARIANT_DIR = $(shell grep '^$(MODEL)' $(BOARDS) | grep variant | sed 's/\(.*\)boards.txt:.*/\1/')
 UPLOAD_RATE ?= $(shell grep "^$(MODEL)\." $(BOARDS) | grep upload.speed | sed 's/.*=//')
 MCU = $(shell grep "^$(MODEL)\." $(BOARDS) | grep build.mcu | sed 's/.*=//')
 F_CPU = $(shell grep "^$(MODEL)\." $(BOARDS) | grep build.f_cpu | sed 's/.*=//')
@@ -179,7 +186,7 @@ F_CPU = $(shell grep "^$(MODEL)\." $(BOARDS) | grep build.f_cpu | sed 's/.*=//')
 # One rumor says that the difference is that arduino does an auto-reset, stk500 doesn't.
 # Might want to grep for upload.protocol as with previous 3 values.
 ifneq ($(findstring tiny,$(MODEL)),)
- AVRDUDE_PROGRAMMER =  $(shell grep "^$(MODEL)\." $(BOARDS) | grep upload.using | sed 's/.*=\(.*\):.*/\1/')
+AVRDUDE_PROGRAMMER =  $(shell grep "^$(MODEL)\." $(BOARDS) | grep upload.using | sed 's/.*=\(.*\):.*/\1/')
  ARDUINO_CORE=$(ATTINY_DIR)/cores/tiny
  ARDUINO_VARIANT=$(ATTINY_DIR)/cores/tiny
  ARDUINO_PROG_HEADER=WProgram.h
@@ -188,7 +195,11 @@ ifneq ($(findstring tiny,$(MODEL)),)
    UPLOAD_RATE=9600
  endif
 else
- AVRDUDE_PROGRAMMER = $(shell grep "^$(MODEL)\." $(BOARDS) | grep upload.protocol | sed 's/.*=//')
+ ifeq ("$(PROGRAMMER)", "")
+  AVRDUDE_PROGRAMMER = $(shell grep "^$(MODEL)\." $(BOARDS) | grep upload.using | sed 's/.*=//')
+ else
+  AVRDUDE_PROGRAMMER = $(PROGRAMMER)
+ endif
  ARDUINO_CORE=$(ARDUINO_DIR)/hardware/arduino/cores/arduino
  ARDUINO_PROG_HEADER=Arduino.h
  SRC=
@@ -205,7 +216,7 @@ else
    ifeq "$(MODEL)" "leonardo"
     ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/leonardo
    else
-    ARDUINO_VARIANT=$(ARDUINO_DIR)/hardware/arduino/variants/$(VARIANT)
+    ARDUINO_VARIANT=$(VARIANT_DIR)/variants/$(VARIANT)
    endif
   endif
  endif
@@ -369,9 +380,11 @@ eep: applet/$(TARGET).eep
 lss: applet/$(TARGET).lss 
 sym: applet/$(TARGET).sym
 
+reset:
+	$(RESET_DEVICE)
+
 # Program the device.  
 upload: applet/$(TARGET).hex
-	$(RESET_DEVICE)
 	$(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_FLASH)
 
 	# Display size of file.
